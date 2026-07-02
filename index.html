@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#E4002B">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>True Call Card — สำรวจลูกค้า</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --true-red:#E4002B; --true-red-dark:#B80022; --true-red-soft:#FFE7EC;
+  --ink:#16161A; --ink-2:#3D3D45; --muted:#71717A;
+  --line:#E6E7EB; --surface:#FFFFFF; --bg:#F4F5F7;
+  --green:#0A7C42; --green-soft:#E4F4EA; --amber:#B26A00; --amber-soft:#FCEFD6;
+  --radius:16px; --radius-sm:11px;
+  --shadow:0 1px 2px rgba(16,16,26,.04),0 6px 20px rgba(16,16,26,.06);
+  --shadow-lg:0 -8px 40px rgba(16,16,26,.16);
+  --font:"IBM Plex Sans Thai","IBM Plex Sans",-apple-system,"Sukhumvit Set","Helvetica Neue",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+.app-head{position:sticky;top:0;z-index:50;background:var(--true-red);color:#fff;padding:calc(12px + env(safe-area-inset-top)) 18px 12px;box-shadow:0 2px 14px rgba(180,0,30,.28)}
+.app-head .row{display:flex;align-items:center;gap:11px;max-width:560px;margin:0 auto}
+.logo{font-weight:700;font-size:18px;background:#fff;color:var(--true-red);padding:3px 9px;border-radius:8px;line-height:1.1}
+.head-title{font-weight:600;font-size:15.5px;line-height:1.15}
+.head-sub{font-size:11.5px;opacity:.82;font-weight:400;margin-top:1px}
+.queue-pill{margin-left:auto;display:none;align-items:center;gap:5px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.34);padding:5px 10px;border-radius:999px;font-size:12px;font-weight:500;font-family:var(--mono)}
+.queue-pill.show{display:inline-flex}
+.queue-pill .dot{width:7px;height:7px;border-radius:50%;background:#FFD84D}
+.progress-wrap{max-width:560px;margin:10px auto 0;height:5px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden}
+.progress-bar{height:100%;width:0;background:#fff;border-radius:99px;transition:width .35s cubic-bezier(.2,.7,.3,1)}
+
+.wrap{max-width:560px;margin:0 auto;padding:16px 14px 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.sec-label{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+.sec-num{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--true-red);background:var(--true-red-soft);width:24px;height:24px;border-radius:7px;display:grid;place-items:center}
+
+.field{margin-bottom:15px}.field:last-child{margin-bottom:0}
+label.q{display:block;font-weight:600;font-size:15px;color:var(--ink);margin-bottom:7px;line-height:1.35}
+label.q .req{color:var(--true-red);margin-left:2px}
+.hint{font-size:12.5px;color:var(--muted);margin:-3px 0 8px}
+input[type=text],input[type=tel],input[type=number],select,textarea{width:100%;font-family:var(--font);font-size:16px;color:var(--ink);background:#fff;border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:13px 14px;transition:border-color .15s,box-shadow .15s;appearance:none;-webkit-appearance:none}
+textarea{resize:vertical;min-height:56px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--true-red);box-shadow:0 0 0 3.5px var(--true-red-soft)}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2371717A' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:42px}
+select.placeholder{color:var(--muted)}
+input.err,select.err{border-color:var(--true-red);box-shadow:0 0 0 3.5px rgba(228,0,43,.10)}
+.err-msg{display:none;color:var(--true-red);font-size:13px;font-weight:500;margin-top:6px}
+.err-msg.show{display:block}
+.reveal{display:none;animation:slideIn .28s cubic-bezier(.2,.7,.3,1)}
+.reveal.show{display:block}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* radios */
+.opts{display:grid;gap:9px}
+.opts label{display:flex;align-items:center;gap:11px;cursor:pointer;border:1.5px solid var(--line);border-radius:var(--radius-sm);padding:13px 14px;font-weight:500;font-size:15px;transition:all .15s;background:#fff}
+.opts label .ic{width:21px;height:21px;flex:none;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;transition:all .15s}
+.opts label .ic svg{width:12px;height:12px;opacity:0;transform:scale(.5);transition:all .15s;color:#fff}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts label:has(input:checked){border-color:var(--true-red);background:var(--true-red-soft)}
+.opts label:has(input:checked) .ic{border-color:var(--true-red);background:var(--true-red)}
+.opts label:has(input:checked) .ic svg{opacity:1;transform:scale(1)}
+
+/* ===== GPS + PLACE ===== */
+.geo-card{border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden;background:linear-gradient(180deg,#fff,#fcfcfd)}
+.geo-head{padding:16px 16px 0}
+.geo-title{display:flex;align-items:center;gap:9px;font-weight:600;font-size:15px}
+.geo-title .pin-ic{color:var(--true-red)}.geo-title .req{color:var(--true-red)}
+.geo-sub{font-size:12.5px;color:var(--muted);margin:5px 0 0}
+.trust{display:inline-flex;align-items:center;gap:5px;margin-top:9px;font-size:11.5px;font-weight:600;color:var(--green);background:var(--green-soft);padding:4px 9px;border-radius:999px}
+.geo-stage{padding:16px}
+.geo-btn{width:100%;border:none;cursor:pointer;font-family:var(--font);background:var(--true-red);color:#fff;font-weight:600;font-size:16.5px;border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 18px rgba(228,0,43,.28);transition:transform .12s,background .2s}
+.geo-btn:active{transform:scale(.985)}
+.geo-btn.locating{background:var(--true-red-dark);pointer-events:none}
+.geo-btn .ring{width:21px;height:21px;border:2.6px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:none;animation:spin .8s linear infinite}
+.geo-btn.locating .ring{display:inline-block}.geo-btn.locating .pin-ic{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.geo-readout{display:none;margin-top:14px}
+.geo-readout.show{display:block;animation:slideIn .3s}
+.coord-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:10px}
+.coord{background:#fff;border:1.5px solid var(--line);border-radius:11px;padding:10px 12px}
+.coord .k{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.coord .v{font-family:var(--mono);font-size:17px;font-weight:600;margin-top:2px;letter-spacing:-.2px}
+.acc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.acc-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:999px;font-family:var(--mono)}
+.acc-chip.good{background:var(--green-soft);color:var(--green)}
+.acc-chip.ok{background:var(--amber-soft);color:var(--amber)}
+.acc-note{font-size:12px;color:var(--muted);font-weight:500}
+#map{height:170px;width:100%;border-radius:12px;border:1.5px solid var(--line);background:#eef0f3;z-index:1}
+.locked-tip{font-size:11.5px;color:var(--muted);margin:8px 2px 0;display:flex;align-items:center;gap:6px}
+
+/* low accuracy block */
+.geo-block{display:none;margin-top:14px;background:var(--amber-soft);border:1px solid #F0D38A;border-radius:12px;padding:13px 14px}
+.geo-block.show{display:block;animation:slideIn .3s}
+.geo-block .t{font-weight:600;font-size:14px;color:#6B4A00;display:flex;align-items:center;gap:7px}
+.geo-block .d{font-size:12.5px;color:#7A5600;margin-top:5px;line-height:1.45}
+.geo-err{display:none;margin-top:14px;background:var(--true-red-soft);border-radius:12px;padding:13px 14px;font-size:13px;color:var(--true-red-dark);font-weight:500;line-height:1.45}
+.geo-err.show{display:block}
+.retry-btn{margin-top:12px;width:100%;border:1.5px solid var(--true-red);background:#fff;color:var(--true-red);font-family:var(--font);font-weight:600;font-size:14px;border-radius:11px;padding:12px;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer}
+.retry-btn:active{transform:scale(.99)}
+
+/* selected place chip */
+.place-box{display:none;margin-top:13px}
+.place-box.show{display:block;animation:slideIn .3s}
+.place-chip{border:1.5px solid var(--green);background:var(--green-soft);border-radius:13px;padding:13px 14px;display:flex;align-items:flex-start;gap:11px}
+.place-chip .pic{width:38px;height:38px;flex:none;border-radius:10px;background:#fff;display:grid;place-items:center;font-size:19px}
+.place-chip .pn{font-weight:600;font-size:15px;color:var(--ink);line-height:1.3}
+.place-chip .pm{font-size:12px;color:var(--ink-2);margin-top:3px;font-family:var(--mono)}
+.place-chip .pd{font-size:11.5px;color:var(--green);font-weight:600;margin-top:4px}
+.place-change{background:none;border:none;color:var(--true-red);font-weight:600;font-family:var(--font);font-size:13px;cursor:pointer;padding:10px 2px 0;text-decoration:underline}
+.err-msg#err-place{margin-top:12px}
+
+/* ===== bottom sheet ===== */
+.sheet-overlay{position:fixed;inset:0;z-index:80;background:rgba(16,16,26,.42);opacity:0;pointer-events:none;transition:opacity .28s;backdrop-filter:blur(2px)}
+.sheet-overlay.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:81;background:#fff;border-radius:22px 22px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:82vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom)}
+.sheet.show{transform:translateY(0)}
+.sheet-grip{width:38px;height:4px;background:var(--line);border-radius:99px;margin:10px auto 4px}
+.sheet-head{padding:8px 20px 12px;border-bottom:1px solid var(--line)}
+.sheet-head h3{margin:0;font-size:18px;font-weight:700}
+.sheet-head p{margin:3px 0 0;font-size:13px;color:var(--muted)}
+.sheet-body{overflow-y:auto;padding:12px 16px 16px;-webkit-overflow-scrolling:touch}
+.sug{display:flex;align-items:center;gap:12px;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:13px;padding:13px 14px;margin-bottom:9px;cursor:pointer;font-family:var(--font);transition:all .14s}
+.sug:active{transform:scale(.99)}
+.sug:hover{border-color:var(--true-red);background:var(--true-red-soft)}
+.sug .si{width:40px;height:40px;flex:none;border-radius:11px;background:var(--bg);display:grid;place-items:center;font-size:20px}
+.sug .sname{font-weight:600;font-size:14.5px;color:var(--ink);line-height:1.3}
+.sug .smeta{font-size:12px;color:var(--muted);margin-top:2px}
+.sug .sdist{margin-left:auto;flex:none;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--true-red);background:var(--true-red-soft);padding:5px 9px;border-radius:8px}
+.sug .tag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:5px;margin-right:5px;vertical-align:1px}
+.tag.v{background:#E7F0FF;color:#1857C4}.tag.b{background:#F3E9FF;color:#7A2BD1}
+.sheet-actions{display:grid;gap:9px;margin-top:6px}
+.sheet-btn{border:1.5px solid var(--line);background:#fff;color:var(--ink-2);font-family:var(--font);font-weight:600;font-size:14.5px;border-radius:12px;padding:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.sheet-btn:active{transform:scale(.99)}
+.sheet-btn.primary{border-color:var(--true-red);color:var(--true-red);background:var(--true-red-soft)}
+.search-box{display:flex;align-items:center;gap:9px;border:1.5px solid var(--true-red);border-radius:12px;padding:0 13px;margin-bottom:12px;box-shadow:0 0 0 3.5px var(--true-red-soft)}
+.search-box input{border:none!important;box-shadow:none!important;padding:13px 0!important;background:transparent}
+.search-box svg{color:var(--muted);flex:none}
+.empty{text-align:center;color:var(--muted);font-size:14px;padding:26px 10px}
+.custom-wrap{padding-top:4px}
+.custom-wrap label{font-weight:600;font-size:14px;display:block;margin-bottom:7px}
+
+.submit-bar{position:fixed;left:0;right:0;bottom:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:12px 14px calc(12px + env(safe-area-inset-bottom))}
+.submit-bar .inner{max-width:560px;margin:0 auto}
+.btn-submit{width:100%;border:none;cursor:pointer;font-family:var(--font);background:var(--true-red);color:#fff;font-weight:700;font-size:17px;border-radius:14px;padding:16px;display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 6px 18px rgba(228,0,43,.3);transition:transform .12s,opacity .2s}
+.btn-submit:active{transform:scale(.99)}.btn-submit.sending{opacity:.7;pointer-events:none}
+.btn-submit .ring{width:19px;height:19px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;display:none;animation:spin .8s linear infinite}
+.btn-submit.sending .ring{display:inline-block}
+
+.done{position:fixed;inset:0;z-index:100;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;padding:30px 24px calc(30px + env(safe-area-inset-bottom));text-align:center}
+.done.show{display:flex;animation:fadeUp .4s}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.done .check{width:84px;height:84px;border-radius:50%;background:var(--green);display:grid;place-items:center;margin-bottom:22px;box-shadow:0 10px 30px rgba(10,124,66,.3);animation:pop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes pop{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1)}}
+.done h2{font-size:24px;font-weight:700;margin:0 0 6px}
+.done p{color:var(--muted);font-size:15px;margin:0 0 4px;max-width:340px}
+.done .summary{font-family:var(--mono);font-size:13px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:20px 0 4px;color:var(--ink-2);line-height:1.7}
+.done .offline-tag{display:inline-flex;align-items:center;gap:7px;background:var(--amber-soft);color:var(--amber);font-weight:600;font-size:13px;padding:7px 13px;border-radius:999px;margin-top:14px}
+.done .next-wrap{margin-top:28px;width:100%;max-width:360px}
+.btn-next{width:100%;border:none;cursor:pointer;font-family:var(--font);background:var(--true-red);color:#fff;font-weight:700;font-size:16px;border-radius:14px;padding:15px;box-shadow:0 6px 18px rgba(228,0,43,.28)}
+.btn-next:active{transform:scale(.99)}
+
+.setup{display:none;background:var(--amber-soft);border:1px solid #F0D38A;color:#6B4A00;border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.5;margin-bottom:14px}
+.setup.show{display:block}.setup code{font-family:var(--mono);background:#fff;padding:1px 5px;border-radius:4px;font-size:11.5px}
+.foot{text-align:center;color:#B3B3BB;font-size:11.5px;padding:6px 0 22px}
+</style>
+</head>
+<body>
+
+<header class="app-head">
+  <div class="row">
+    <span class="logo">true</span>
+    <div>
+      <div class="head-title">Call Card · สำรวจลูกค้า</div>
+      <div class="head-sub">ทรู ไฟเบอร์ — เน็ตบ้านความเร็วสูง</div>
+    </div>
+    <span class="queue-pill" id="queuePill"><span class="dot"></span><span id="queueCount">0</span> ค้างส่ง</span>
+  </div>
+  <div class="progress-wrap"><div class="progress-bar" id="progress"></div></div>
+</header>
+
+<form id="form" class="wrap" novalidate>
+
+  <div class="setup" id="setupBanner">
+    ⚙️ <b>ยังไม่ได้เชื่อมปลายทางบันทึกข้อมูล</b> — ใส่ลิงก์ Google Apps Script ที่ตัวแปร <code>ENDPOINT_URL</code> บนสุดของไฟล์ ระหว่างนี้ระบบเก็บข้อมูลไว้ในเครื่องชั่วคราว
+  </div>
+
+  <!-- 01 ตำแหน่ง + สถานที่ -->
+  <div class="card">
+    <div class="sec-label"><span class="sec-num">01</span> ตำแหน่ง &amp; สถานที่</div>
+    <div class="geo-card">
+      <div class="geo-head">
+        <div class="geo-title">
+          <svg class="pin-ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.3-7-11.5A7 7 0 0 1 19 9.5C19 14.7 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.6"/></svg>
+          ปักหมุด ณ จุดที่ยืนอยู่ <span class="req">*</span>
+        </div>
+        <p class="geo-sub">ยืนหน้าบ้าน/หน้าอาคารลูกค้า แล้วกดปุ่มด้านล่าง ระบบจะจับพิกัด GPS จริงให้</p>
+        <span class="trust">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          ล็อกตำแหน่งจริง แก้ไขหมุดเองไม่ได้
+        </span>
+      </div>
+      <div class="geo-stage">
+        <button type="button" class="geo-btn" id="geoBtn">
+          <span class="ring"></span>
+          <svg class="pin-ic" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+          <span id="geoBtnText">ปักหมุดตำแหน่งปัจจุบัน</span>
+        </button>
+
+        <!-- low accuracy -->
+        <div class="geo-block" id="geoBlock">
+          <div class="t">⚠️ <span id="blockTitle">สัญญาณ GPS ยังไม่แม่นพอ</span></div>
+          <div class="d" id="blockDesc"></div>
+          <button type="button" class="retry-btn" id="blockRetry">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+            จับสัญญาณใหม่
+          </button>
+        </div>
+        <div class="geo-err" id="geoErr"></div>
+
+        <!-- readout -->
+        <div class="geo-readout" id="geoReadout">
+          <div class="coord-grid">
+            <div class="coord"><div class="k">Latitude</div><div class="v" id="latVal">—</div></div>
+            <div class="coord"><div class="k">Longitude</div><div class="v" id="lngVal">—</div></div>
+          </div>
+          <div class="acc-row">
+            <span class="acc-chip good" id="accChip"><span style="width:8px;height:8px;border-radius:50%;background:currentColor"></span><span id="accText">±0 ม.</span></span>
+            <span class="acc-note" id="accNote">พิกัดล็อกแล้ว</span>
+          </div>
+          <div id="map"></div>
+          <div class="locked-tip">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            หมุดตรึงที่ตำแหน่งจริงของคุณ — ปรับเองไม่ได้เพื่อความถูกต้องของข้อมูล
+          </div>
+        </div>
+
+        <!-- selected place -->
+        <div class="place-box" id="placeBox">
+          <div class="place-chip">
+            <div class="pic" id="placeIcon">🏘️</div>
+            <div style="flex:1;min-width:0">
+              <div class="pn" id="placeName">—</div>
+              <div class="pm" id="placeMeta">—</div>
+              <div class="pd" id="placeDist"></div>
+            </div>
+          </div>
+          <button type="button" class="place-change" id="placeChange">เปลี่ยนสถานที่</button>
+        </div>
+      </div>
+    </div>
+    <div class="err-msg" id="err-geo">กรุณาปักหมุดตำแหน่งก่อน</div>
+    <div class="err-msg" id="err-place">กรุณาเลือกหรือระบุสถานที่</div>
+  </div>
+
+  <!-- 02 ข้อมูลลูกค้า -->
+  <div class="card">
+    <div class="sec-label"><span class="sec-num">02</span> ข้อมูลลูกค้า</div>
+    <div class="field">
+      <label class="q" for="custName">ชื่อของลูกค้า <span class="req">*</span></label>
+      <input type="text" id="custName" placeholder="เช่น คุณสมชาย / น้อย" autocomplete="off">
+      <div class="err-msg" id="err-custName">กรุณากรอกชื่อลูกค้า</div>
+    </div>
+    <div class="field">
+      <label class="q" for="custPhone">เบอร์ติดต่อของลูกค้า</label>
+      <div class="hint">ถ้าลูกค้าไม่สะดวกให้เบอร์ เว้นว่างได้</div>
+      <input type="tel" id="custPhone" placeholder="08X-XXX-XXXX" inputmode="numeric" autocomplete="off" maxlength="12">
+      <div class="err-msg" id="err-custPhone">เบอร์ควรมี 9–10 หลัก</div>
+    </div>
+  </div>
+
+  <!-- 03 แบบสำรวจ -->
+  <div class="card">
+    <div class="sec-label"><span class="sec-num">03</span> แบบสำรวจการใช้อินเทอร์เน็ต</div>
+
+    <!-- Q1 -->
+    <div class="field">
+      <label class="q">1. ปัจจุบันใช้อินเทอร์เน็ตบ้านของผู้ให้บริการรายใด <span class="req">*</span></label>
+      <div class="opts" id="q1opts">
+        <label><input type="radio" name="q1" value="AIS"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>AIS</label>
+        <label><input type="radio" name="q1" value="3BB"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>3BB</label>
+        <label><input type="radio" name="q1" value="TRUE"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>TRUE</label>
+        <label><input type="radio" name="q1" value="NT"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>NT</label>
+        <label><input type="radio" name="q1" value="อื่นๆ"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>อื่นๆ (ระบุ)</label>
+        <label><input type="radio" name="q1" value="ไม่ได้ใช้งาน"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>ไม่ได้ใช้งาน</label>
+      </div>
+      <div class="reveal" id="q1OtherWrap" style="margin-top:10px">
+        <input type="text" id="q1Other" placeholder="ระบุชื่อผู้ให้บริการ">
+        <div class="err-msg" id="err-q1Other">กรุณาระบุผู้ให้บริการ</div>
+      </div>
+      <div class="err-msg" id="err-q1">กรุณาเลือกคำตอบ</div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="field">
+      <label class="q" for="q2">2. ค่าบริการอินเทอร์เน็ตบ้านต่อเดือน (โดยประมาณ) <span class="req">*</span></label>
+      <select id="q2" class="placeholder"><option value="" disabled selected>เลือกช่วงค่าบริการ…</option></select>
+      <div class="err-msg" id="err-q2">กรุณาเลือกช่วงค่าบริการ</div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="field">
+      <label class="q" for="q3">3. ปัจจุบันพบปัญหาในการใช้งานหรือไม่ <span class="req">*</span></label>
+      <select id="q3" class="placeholder"><option value="" disabled selected>เลือกคำตอบ…</option></select>
+      <div class="reveal" id="q3OtherWrap" style="margin-top:10px">
+        <input type="text" id="q3Other" placeholder="ระบุปัญหาที่พบ">
+        <div class="err-msg" id="err-q3Other">กรุณาระบุปัญหา</div>
+      </div>
+      <div class="err-msg" id="err-q3">กรุณาเลือกคำตอบ</div>
+    </div>
+
+    <!-- Q4 conditional: ใช้ค่ายอื่น -->
+    <div class="reveal" id="q4Wrap">
+      <div class="field">
+        <label class="q">4. อินเทอร์เน็ตที่ใช้งานมีของแถมหรือไม่ <span class="req">*</span></label>
+        <div class="opts" id="q4opts">
+          <label><input type="radio" name="q4" value="NO"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>ไม่มีของแถม</label>
+          <label><input type="radio" name="q4" value="YES"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>มีของแถม (ระบุ)</label>
+        </div>
+        <div class="err-msg" id="err-q4">กรุณาเลือกคำตอบ</div>
+      </div>
+      <div class="reveal" id="q4DetailWrap">
+        <div class="field">
+          <label class="q" for="q4Detail">ของแถมที่ได้รับ <span class="req">*</span></label>
+          <input type="text" id="q4Detail" placeholder="เช่น กล่องทีวี, มือถือ, ส่วนลด">
+          <div class="err-msg" id="err-q4Detail">กรุณาระบุของแถม</div>
+        </div>
+        <div class="field">
+          <label class="q" for="q4Problem">ของแถมมีปัญหาการใช้งานหรือไม่</label>
+          <input type="text" id="q4Problem" placeholder="ระบุปัญหา (ถ้ามี) หรือเว้นว่าง">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 ผู้ขาย -->
+  <div class="card">
+    <div class="sec-label"><span class="sec-num">04</span> ผู้ขาย</div>
+    <div class="field">
+      <label class="q" for="saleCode">Sale Code <span class="req">*</span></label>
+      <div class="hint">รหัสประจำตัวผู้ขาย (จำค่าล่าสุดให้อัตโนมัติ)</div>
+      <input type="text" id="saleCode" placeholder="เช่น 39126700" inputmode="numeric" autocomplete="off">
+      <div class="err-msg" id="err-saleCode">กรุณากรอก Sale Code</div>
+    </div>
+  </div>
+
+  <p class="foot">True Call Card v2 · แนะนำสถานที่จากฐานข้อมูลหมู่บ้าน &amp; อาคาร</p>
+</form>
+
+<div class="submit-bar"><div class="inner">
+  <button type="button" class="btn-submit" id="submitBtn"><span class="ring"></span><span id="submitText">บันทึกข้อมูลลูกค้า</span></button>
+</div></div>
+
+<!-- bottom sheet -->
+<div class="sheet-overlay" id="sheetOverlay"></div>
+<div class="sheet" id="sheet">
+  <div class="sheet-grip"></div>
+  <div class="sheet-head">
+    <h3 id="sheetTitle">คุณอยู่ที่นี่ใช่ไหม?</h3>
+    <p id="sheetSub">เลือกหมู่บ้าน/คอนโดที่ตรงกับจุดที่ยืนอยู่</p>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</div>
+
+<!-- success -->
+<div class="done" id="doneScreen">
+  <div class="check"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+  <h2>บันทึกเรียบร้อย</h2>
+  <p id="doneMsg">ส่งข้อมูลลูกค้าเข้าระบบแล้ว</p>
+  <div class="summary" id="doneSummary"></div>
+  <div id="doneOffline"></div>
+  <div class="next-wrap"><button type="button" class="btn-next" id="nextBtn">+ บันทึกลูกค้ารายถัดไป</button></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="places.js" defer></script>
+<script>
+/* ============================================================
+   ⚙️ ใส่ลิงก์ Google Apps Script Web App (ลงท้าย /exec)
+   ============================================================ */
+const ENDPOINT_URL = "";
+
+const ACC_MAX = 50;      // ความแม่นยำแย่กว่านี้ = บล็อก (เมตร) กันปลอมพิกัด
+const REFINE_MS = 8000;  // เวลาไล่จับให้แม่นสุด
+
+/* ===== ตัวเลือก ===== */
+const Q2_COST = ["100-300 บาท","301-499 บาท","500-699 บาท","700-899 บาท","900 บาทขึ้นไป"];
+const Q3_PROBLEM = ["สัญญาณไม่ดี หลุดบ่อย","อินเทอร์เน็ตช้า ไม่เสถียร","ไม่พบปัญหาการใช้งาน","อื่นๆ (ระบุ)"];
+const COMPETITORS = ["AIS","3BB","NT","อื่นๆ"]; // ใช้ค่ายอื่น -> โผล่ข้อ 4
+
+const $=id=>document.getElementById(id);
+function fillSelect(el,items){items.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});}
+fillSelect($('q2'),Q2_COST);
+fillSelect($('q3'),Q3_PROBLEM);
+
+const store={
+  get(k){try{return localStorage.getItem(k)}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,v)}catch(e){}},
+  getJSON(k,d){try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}},
+  setJSON(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+
+/* ============================================================
+   GPS — real location only, non-draggable, accuracy-gated
+   ============================================================ */
+let coords=null, place=null;
+let map=null, marker=null, accCircle=null;
+const MAP_OK = typeof L!=='undefined';
+
+function accClass(m){return m<=20?'good':'ok'}
+function paintCoords(){
+  $('latVal').textContent=coords.lat.toFixed(6);
+  $('lngVal').textContent=coords.lng.toFixed(6);
+  const m=Math.round(coords.acc);
+  $('accChip').className='acc-chip '+accClass(m);
+  $('accText').textContent='±'+m+' ม.';
+  $('accNote').textContent = m<=20?'พิกัดแม่นยำ ล็อกแล้ว':'พิกัดล็อกแล้ว';
+}
+function drawMap(){
+  if(!MAP_OK){$('map').style.display='none';return;}
+  if(!map){
+    map=L.map('map',{zoomControl:false,attributionControl:false,dragging:false,scrollWheelZoom:false,doubleClickZoom:false,touchZoom:false,boxZoom:false,keyboard:false,tap:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+    marker=L.marker([coords.lat,coords.lng]).addTo(map);
+    accCircle=L.circle([coords.lat,coords.lng],{radius:coords.acc,color:'#E4002B',weight:1.5,fillColor:'#E4002B',fillOpacity:.08}).addTo(map);
+  }else{
+    marker.setLatLng([coords.lat,coords.lng]);
+    accCircle.setLatLng([coords.lat,coords.lng]).setRadius(coords.acc);
+  }
+  map.setView([coords.lat,coords.lng],17);
+  setTimeout(()=>map.invalidateSize(),150);
+}
+
+function resetGeoUI(){
+  $('geoErr').classList.remove('show');
+  $('geoBlock').classList.remove('show');
+}
+
+function locate(){
+  resetGeoUI();
+  const btn=$('geoBtn');
+  if(!navigator.geolocation){showGeoErr('อุปกรณ์นี้ไม่รองรับ GPS');return;}
+  btn.classList.add('locating');$('geoBtnText').textContent='กำลังจับสัญญาณ GPS…';
+  let best=null,done=false,watchId=null;
+  const finish=()=>{
+    if(done)return;done=true;
+    if(watchId!=null)navigator.geolocation.clearWatch(watchId);
+    clearTimeout(timer);
+    btn.classList.remove('locating');
+    if(best && best.acc<=ACC_MAX){
+      coords={lat:best.lat,lng:best.lng,acc:best.acc};
+      $('geoBtnText').textContent='ปักหมุดใหม่';
+      $('geoReadout').classList.add('show');
+      paintCoords();drawMap();clearErr('geo');
+      suggestPlaces(); // เด้ง pop-up แนะนำสถานที่
+    }else{
+      $('geoBtnText').textContent='ปักหมุดตำแหน่งปัจจุบัน';
+      showLowAcc(best);
+    }
+    updateProgress();
+  };
+  watchId=navigator.geolocation.watchPosition(pos=>{
+    const c={lat:pos.coords.latitude,lng:pos.coords.longitude,acc:pos.coords.accuracy||999};
+    if(!best||c.acc<best.acc)best=c;
+    if(best.acc<=20)finish(); // แม่นพอแล้ว หยุดเลย
+  },err=>{
+    if(best){finish();return;}
+    done=true;btn.classList.remove('locating');$('geoBtnText').textContent='ปักหมุดตำแหน่งปัจจุบัน';
+    let m='จับ GPS ไม่สำเร็จ';
+    if(err.code===1)m='⚠️ ยังไม่ได้อนุญาตให้เข้าถึงตำแหน่ง — เปิดสิทธิ์ Location ในเบราว์เซอร์/มือถือ แล้วลองใหม่';
+    else if(err.code===2)m='หาตำแหน่งไม่เจอ ลองออกไปที่โล่งแล้วกดใหม่';
+    else if(err.code===3)m='หมดเวลาจับสัญญาณ ลองอีกครั้ง';
+    showGeoErr(m);
+  },{enableHighAccuracy:true,timeout:REFINE_MS+2000,maximumAge:0});
+  const timer=setTimeout(finish,REFINE_MS);
+}
+function showGeoErr(m){$('geoErr').textContent=m;$('geoErr').classList.add('show');}
+function showLowAcc(best){
+  const m=best?Math.round(best.acc):'—';
+  $('blockTitle').textContent=`สัญญาณ GPS ยังไม่แม่นพอ (±${m} ม.)`;
+  $('blockDesc').textContent=`ระบบรับพิกัดที่แม่นยำในระยะ ${ACC_MAX} เมตรเท่านั้น เพื่อยืนยันว่าลงพื้นที่จริง — ลองขยับออกไปที่โล่ง เลี่ยงในอาคาร/ใต้หลังคา แล้วกดจับใหม่`;
+  $('geoBlock').classList.add('show');
+  coords=null;$('geoReadout').classList.remove('show');
+}
+$('geoBtn').addEventListener('click',locate);
+$('blockRetry').addEventListener('click',locate);
+
+/* ============================================================
+   แนะนำสถานที่ใกล้เคียง (หมู่บ้าน/คอนโด)
+   ============================================================ */
+function haversine(la1,ln1,la2,ln2){
+  const R=6371000,t=Math.PI/180;
+  const dLa=(la2-la1)*t,dLn=(ln2-ln1)*t;
+  const a=Math.sin(dLa/2)**2+Math.cos(la1*t)*Math.cos(la2*t)*Math.sin(dLn/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+function nearest(lat,lng,n){
+  const P=window.PLACES;if(!P)return[];
+  const out=[];
+  const scan=(arr,type,tag)=>{
+    for(let i=0;i<arr.length;i++){
+      const p=arr[i];
+      if(Math.abs(p[1]-lat)>0.05||Math.abs(p[2]-lng)>0.05)continue;
+      out.push({name:p[0],lat:p[1],lng:p[2],region:p[3],pbh:p[4],type,tag,dist:haversine(lat,lng,p[1],p[2])});
+    }
+  };
+  scan(P.v,'หมู่บ้าน','v');scan(P.b,'คอนโด/อพาร์ตเมนต์','b');
+  out.sort((a,b)=>a.dist-b.dist);
+  return out.slice(0,n);
+}
+function fmtDist(d){return d<1000?Math.round(d)+' ม.':(d/1000).toFixed(1)+' กม.';}
+function iconFor(tag){return tag==='v'?'🏘️':'🏢';}
+
+let sheetMode='suggest';
+function openSheet(){$('sheetOverlay').classList.add('show');$('sheet').classList.add('show');}
+function closeSheet(){$('sheetOverlay').classList.remove('show');$('sheet').classList.remove('show');}
+$('sheetOverlay').addEventListener('click',closeSheet);
+
+function suggestPlaces(){
+  if(!window.PLACES){ // ข้อมูลยังโหลดไม่เสร็จ -> ข้ามไปโหมดค้นหา
+    renderSearch();openSheet();return;
+  }
+  const list=nearest(coords.lat,coords.lng,3);
+  const body=$('sheetBody');
+  $('sheetTitle').textContent='คุณอยู่ที่นี่ใช่ไหม?';
+  $('sheetSub').textContent='เลือกหมู่บ้าน/คอนโดที่ตรงกับจุดที่ยืนอยู่';
+  body.innerHTML='';
+  if(list.length){
+    list.forEach(p=>body.appendChild(sugEl(p)));
+  }else{
+    body.innerHTML='<div class="empty">ไม่พบสถานที่ใกล้เคียงในระบบ</div>';
+  }
+  const acts=document.createElement('div');acts.className='sheet-actions';
+  acts.innerHTML=`
+    <button type="button" class="sheet-btn" id="toSearch">🔍 ค้นหาชื่ออื่น</button>
+    <button type="button" class="sheet-btn" id="toCustom">📍 ไม่อยู่ในหมู่บ้าน/คอนโด (ระบุเอง)</button>`;
+  body.appendChild(acts);
+  $('toSearch').onclick=renderSearch;
+  $('toCustom').onclick=renderCustom;
+  openSheet();
+}
+function sugEl(p){
+  const b=document.createElement('button');b.type='button';b.className='sug';
+  b.innerHTML=`<div class="si">${iconFor(p.tag)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="sname">${p.name}</div>
+      <div class="smeta">${p.type} · ${p.region} › ${p.pbh}</div>
+    </div>
+    <div class="sdist">${fmtDist(p.dist)}</div>`;
+  b.onclick=()=>selectPlace({name:p.name,type:p.type,tag:p.tag,region:p.region,pbh:p.pbh,dist:Math.round(p.dist)});
+  return b;
+}
+
+function renderSearch(){
+  const body=$('sheetBody');
+  $('sheetTitle').textContent='ค้นหาสถานที่';
+  $('sheetSub').textContent='พิมพ์ชื่อหมู่บ้านหรือคอนโด';
+  body.innerHTML=`
+    <div class="search-box">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="พิมพ์ชื่อ… อย่างน้อย 2 ตัวอักษร" autocomplete="off">
+    </div>
+    <div id="searchResults"><div class="empty">พิมพ์เพื่อค้นหา…</div></div>
+    <div class="sheet-actions"><button type="button" class="sheet-btn" id="toCustom2">📍 ไม่อยู่ในหมู่บ้าน/คอนโด (ระบุเอง)</button></div>`;
+  const inp=$('searchInput');
+  let t=null;
+  inp.addEventListener('input',()=>{clearTimeout(t);t=setTimeout(()=>runSearch(inp.value.trim()),160);});
+  $('toCustom2').onclick=renderCustom;
+  setTimeout(()=>inp.focus(),200);
+}
+function runSearch(q){
+  const res=$('searchResults');
+  if(q.length<2){res.innerHTML='<div class="empty">พิมพ์เพื่อค้นหา…</div>';return;}
+  const P=window.PLACES;
+  if(!P){res.innerHTML='<div class="empty">กำลังโหลดฐานข้อมูล… ลองอีกครั้ง</div>';return;}
+  const ql=q.toLowerCase();const found=[];
+  const scan=(arr,type,tag)=>{for(let i=0;i<arr.length&&found.length<25;i++){if(arr[i][0].toLowerCase().includes(ql))found.push({name:arr[i][0],region:arr[i][3],pbh:arr[i][4],lat:arr[i][1],lng:arr[i][2],type,tag});}};
+  scan(P.v,'หมู่บ้าน','v');
+  if(found.length<25)scan(P.b,'คอนโด/อพาร์ตเมนต์','b');
+  if(!found.length){res.innerHTML='<div class="empty">ไม่พบชื่อนี้ ลองพิมพ์คำอื่น หรือกด “ระบุเอง”</div>';return;}
+  res.innerHTML='';
+  found.forEach(p=>{
+    const d=coords?Math.round(haversine(coords.lat,coords.lng,p.lat,p.lng)):null;
+    const b=document.createElement('button');b.type='button';b.className='sug';
+    b.innerHTML=`<div class="si">${iconFor(p.tag)}</div>
+      <div style="flex:1;min-width:0"><div class="sname">${p.name}</div>
+      <div class="smeta">${p.type} · ${p.region} › ${p.pbh}</div></div>
+      ${d!=null?`<div class="sdist">${fmtDist(d)}</div>`:''}`;
+    b.onclick=()=>selectPlace({name:p.name,type:p.type,tag:p.tag,region:p.region,pbh:p.pbh,dist:d});
+    res.appendChild(b);
+  });
+}
+
+function renderCustom(){
+  // ใช้ region/pbh จากที่ใกล้สุด (ถ้ามี) เพื่อคงบริบทพื้นที่
+  const near=(window.PLACES&&coords)?nearest(coords.lat,coords.lng,1)[0]:null;
+  const body=$('sheetBody');
+  $('sheetTitle').textContent='ระบุสถานที่เอง';
+  $('sheetSub').textContent='สำหรับบ้านเดี่ยว/พื้นที่ที่ไม่มีในระบบ';
+  body.innerHTML=`
+    <div class="custom-wrap">
+      <label>ชื่อ/จุดสังเกตของสถานที่</label>
+      <input type="text" id="customName" placeholder="เช่น บ้านเดี่ยวซอยลาดพร้าว 15, ตลาดนัด…">
+      ${near?`<p style="font-size:12.5px;color:var(--muted);margin:10px 2px 0">พื้นที่โดยประมาณ: <b>${near.region} › ${near.pbh}</b> (อ้างอิงจุดใกล้สุด)</p>`:''}
+      <div class="sheet-actions" style="margin-top:16px">
+        <button type="button" class="sheet-btn primary" id="customConfirm">ยืนยันสถานที่นี้</button>
+        <button type="button" class="sheet-btn" id="backToSug">← กลับไปดูที่แนะนำ</button>
+      </div>
+    </div>`;
+  $('backToSug').onclick=suggestPlaces;
+  $('customConfirm').onclick=()=>{
+    const nm=$('customName').value.trim();
+    if(!nm){$('customName').classList.add('err');$('customName').focus();return;}
+    selectPlace({name:nm,type:'บ้านเดี่ยว/อื่นๆ',tag:'o',region:near?near.region:'',pbh:near?near.pbh:'',dist:'',custom:true});
+  };
+  setTimeout(()=>$('customName').focus(),200);
+}
+
+function selectPlace(p){
+  place=p;
+  $('placeIcon').textContent = p.tag==='v'?'🏘️':(p.tag==='b'?'🏢':'🏠');
+  $('placeName').textContent=p.name;
+  $('placeMeta').textContent=(p.region||'—')+(p.pbh?' › '+p.pbh:'');
+  $('placeDist').textContent = p.custom?'ระบุเอง (นอกระบบหมู่บ้าน/คอนโด)':(p.dist!==''?`ห่างจากหมุด ~${fmtDist(p.dist)}`:'');
+  $('placeBox').classList.add('show');
+  clearErr('place');closeSheet();updateProgress();
+}
+$('placeChange').addEventListener('click',()=>{ if(coords)suggestPlaces(); });
+
+/* ============================================================
+   Conditional logic คำถาม
+   ============================================================ */
+document.querySelectorAll('input[name=q1]').forEach(r=>r.addEventListener('change',()=>{
+  const v=document.querySelector('input[name=q1]:checked').value;
+  toggle('q1OtherWrap', v==='อื่นๆ');
+  const isComp = COMPETITORS.includes(v);
+  toggle('q4Wrap', isComp);
+  if(!isComp){ // เคลียร์ข้อ 4
+    document.querySelectorAll('input[name=q4]').forEach(x=>x.checked=false);
+    toggle('q4DetailWrap',false);
+  }
+  clearErr('q1');updateProgress();
+}));
+$('q2').addEventListener('change',e=>{e.target.classList.remove('placeholder');clearErr('q2');updateProgress();});
+$('q3').addEventListener('change',e=>{e.target.classList.remove('placeholder');toggle('q3OtherWrap',e.target.value==='อื่นๆ (ระบุ)');clearErr('q3');updateProgress();});
+document.querySelectorAll('input[name=q4]').forEach(r=>r.addEventListener('change',()=>{
+  const v=document.querySelector('input[name=q4]:checked').value;
+  toggle('q4DetailWrap', v==='YES');clearErr('q4');updateProgress();
+}));
+
+function toggle(id,show){const el=$(id);if(show)el.classList.add('show');else el.classList.remove('show');}
+
+/* ============================================================
+   Validation
+   ============================================================ */
+function setErr(id){const f=$(id);if(f)f.classList.add('err');const e=$('err-'+id);if(e)e.classList.add('show');}
+function clearErr(id){const f=$(id);if(f)f.classList.remove('err');const e=$('err-'+id);if(e)e.classList.remove('show');}
+['custName','custPhone','q1Other','q3Other','q4Detail','saleCode'].forEach(id=>{const el=$(id);if(el)el.addEventListener('input',()=>clearErr(id));});
+
+function validate(){
+  let ok=true,first=null;
+  const fail=id=>{setErr(id);ok=false;if(!first)first=$('err-'+id)||$(id);};
+  if(!coords){$('err-geo').classList.add('show');ok=false;if(!first)first=$('err-geo');}
+  if(!place){$('err-place').classList.add('show');ok=false;if(!first)first=$('err-place');}
+  if(!$('custName').value.trim())fail('custName');
+  const ph=$('custPhone').value.replace(/\D/g,'');
+  if(ph&&(ph.length<9||ph.length>10))fail('custPhone');
+
+  const q1=document.querySelector('input[name=q1]:checked');
+  if(!q1)fail('q1');
+  else if(q1.value==='อื่นๆ'&&!$('q1Other').value.trim())fail('q1Other');
+  if(!$('q2').value)fail('q2');
+  if(!$('q3').value)fail('q3');
+  else if($('q3').value==='อื่นๆ (ระบุ)'&&!$('q3Other').value.trim())fail('q3Other');
+
+  if(q1&&COMPETITORS.includes(q1.value)){
+    const q4=document.querySelector('input[name=q4]:checked');
+    if(!q4)fail('q4');
+    else if(q4.value==='YES'&&!$('q4Detail').value.trim())fail('q4Detail');
+  }
+  if(!$('saleCode').value.trim())fail('saleCode');
+  if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
+  return ok;
+}
+
+/* progress */
+function updateProgress(){
+  const q1=document.querySelector('input[name=q1]:checked');
+  const need=[coords,place,$('custName').value.trim(),q1,$('q2').value,$('q3').value,$('saleCode').value.trim()];
+  const done=need.filter(Boolean).length;
+  $('progress').style.width=Math.round(done/need.length*100)+'%';
+}
+$('form').addEventListener('input',updateProgress);
+$('form').addEventListener('change',updateProgress);
+
+/* ============================================================
+   payload + submit
+   ============================================================ */
+function payload(){
+  const q1v=(document.querySelector('input[name=q1]:checked')||{}).value||'';
+  const provider = q1v==='อื่นๆ' ? $('q1Other').value.trim() : q1v;
+  const q3v=$('q3').value;
+  const q4v=(document.querySelector('input[name=q4]:checked')||{}).value||'';
+  return {
+    submittedAt:new Date().toISOString(),
+    lat:+coords.lat.toFixed(6),lng:+coords.lng.toFixed(6),accuracy:Math.round(coords.acc),source:'gps',
+    mapsUrl:`https://www.google.com/maps?q=${coords.lat},${coords.lng}`,
+    placeType:place.type,placeName:place.name,region:place.region,pbh:place.pbh,
+    placeDistance:(place.dist===''||place.dist==null)?'':place.dist,
+    customerName:$('custName').value.trim(),
+    customerPhone:$('custPhone').value.replace(/\D/g,''),
+    q1_provider:provider,
+    q2_cost:$('q2').value,
+    q3_problem: q3v==='อื่นๆ (ระบุ)' ? $('q3Other').value.trim() : q3v,
+    q4_hasFreebie:q4v,
+    q4_freebieDetail: q4v==='YES' ? $('q4Detail').value.trim() : '',
+    q4_freebieProblem: q4v==='YES' ? $('q4Problem').value.trim() : '',
+    saleCode:$('saleCode').value.trim()
+  };
+}
+async function postData(data){
+  if(!ENDPOINT_URL)throw new Error('NO_ENDPOINT');
+  const res=await fetch(ENDPOINT_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(data)});
+  if(!res.ok)throw new Error('HTTP_'+res.status);
+  return true;
+}
+function queue(){return store.getJSON('callcard_queue',[]);}
+function setQueue(q){store.setJSON('callcard_queue',q);paintQueue();}
+function paintQueue(){const n=queue().length;const p=$('queuePill');if(n>0){p.classList.add('show');$('queueCount').textContent=n;}else p.classList.remove('show');}
+async function flushQueue(){if(!ENDPOINT_URL)return;let q=queue();if(!q.length)return;const rest=[];for(const it of q){try{await postData(it);}catch(e){rest.push(it);}}setQueue(rest);}
+window.addEventListener('online',flushQueue);
+
+$('submitBtn').addEventListener('click',async()=>{
+  if(!validate())return;
+  const btn=$('submitBtn');btn.classList.add('sending');$('submitText').textContent='กำลังบันทึก…';
+  const data=payload();store.set('last_saleCode',data.saleCode);
+  let offline=false;
+  try{await postData(data);}catch(e){offline=true;const q=queue();q.push(data);setQueue(q);}
+  btn.classList.remove('sending');$('submitText').textContent='บันทึกข้อมูลลูกค้า';
+  showDone(data,offline);
+});
+
+function showDone(data,offline){
+  $('doneSummary').innerHTML=
+    `${data.customerName} · ${data.q1_provider||'—'}<br>`+
+    `📍 ${data.placeName}<br>${data.region||'—'} › ${data.pbh||'—'}`;
+  if(offline){$('doneMsg').textContent='เน็ตไม่พร้อม — เก็บไว้ในเครื่องแล้ว จะส่งอัตโนมัติเมื่อมีสัญญาณ';$('doneOffline').innerHTML='<span class="offline-tag"><span style="width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block"></span>บันทึกออฟไลน์ '+queue().length+' รายการ</span>';}
+  else if(!ENDPOINT_URL){$('doneMsg').textContent='ยังไม่ได้ตั้งค่าปลายทาง — เก็บไว้ในเครื่องชั่วคราว';$('doneOffline').innerHTML='';}
+  else{$('doneMsg').textContent='ส่งข้อมูลลูกค้าเข้า Google Sheet แล้ว';$('doneOffline').innerHTML='';}
+  $('doneScreen').classList.add('show');window.scrollTo(0,0);
+}
+
+$('nextBtn').addEventListener('click',()=>{
+  const keepSale=$('saleCode').value;
+  ['custName','custPhone','q1Other','q3Other','q4Detail','q4Problem'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  $('q2').value='';$('q2').classList.add('placeholder');
+  $('q3').value='';$('q3').classList.add('placeholder');
+  document.querySelectorAll('input[name=q1],input[name=q4]').forEach(r=>r.checked=false);
+  ['q1OtherWrap','q3OtherWrap','q4Wrap','q4DetailWrap'].forEach(id=>toggle(id,false));
+  coords=null;place=null;
+  $('geoReadout').classList.remove('show');$('placeBox').classList.remove('show');
+  $('geoBtnText').textContent='ปักหมุดตำแหน่งปัจจุบัน';resetGeoUI();
+  document.querySelectorAll('.err').forEach(e=>e.classList.remove('err'));
+  document.querySelectorAll('.err-msg.show').forEach(e=>e.classList.remove('show'));
+  $('saleCode').value=keepSale;
+  $('doneScreen').classList.remove('show');updateProgress();
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+(function init(){
+  if(!ENDPOINT_URL)$('setupBanner').classList.add('show');
+  const sc=store.get('last_saleCode');if(sc)$('saleCode').value=sc;
+  paintQueue();flushQueue();updateProgress();
+})();
+</script>
+</body>
+</html>
